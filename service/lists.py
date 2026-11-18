@@ -100,9 +100,13 @@ async def list_list_members(
             raise HTTPException(status_code=404, detail="list not found")
         # Reuse the same 404 message so we don't leak existence of other
         # users' lists. assert_account_owned would 403; we want 404 here.
-        from auth import get_request_user
-        _u = get_request_user()
-        if _u is not None and list_row.account_id not in _u.account_ids:
+        # Scope against the full actor (owner OR chatter) account_ids union,
+        # not just the User cookie: a chatter principal carries no User row,
+        # so a get_request_user() check alone leaves this read ungated for
+        # every chatter session and lets one read any account list by id.
+        from chatters import current_actor
+        _actor = current_actor()
+        if _actor is not None and list_row.account_id not in _actor.account_ids:
             raise HTTPException(status_code=404, detail="list not found")
         rows = (
             await s.execute(
